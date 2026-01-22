@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Key Distribution (BB84) Lab</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header>
+        <div class="container">
+            <h1 class="title-gradient">Quantum Cryptography Lab</h1>
+            <p style="color: var(--text-secondary); max-width: 600px; margin: 0 auto;">
+                Simulate the BB84 Protocol for Quantum Key Distribution. Explore how quantum polarization ensures secure
+                communication and detects eavesdroppers.
+            </p>
+        </div>
+    </header>
+
+    <main class="container">
+
+        <!-- Simulation Area -->
+        <section class="glass-panel">
+            <div class="controls">
+                <button id="toggle-eve-btn" class="btn btn-secondary">Enable Eve (Spy)</button>
+                <div style="flex-grow: 1;"></div>
+                <button id="reset-btn" class="btn btn-secondary">Reset</button>
+            </div>
+
+            <div style="text-align: center; margin: 1rem 0;">
+                <h3 id="current-step" style="color: var(--accent-blue);">Ready to start.</h3>
+            </div>
+
+            <div class="sim-container">
+                <!-- Alice (Sender) -->
+                <div class="actor-panel">
+                    <h3>Alice</h3>
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&backgroundColor=b6e3f4" alt="Alice"
+                        class="actor-avatar">
+                    <button id="gen-sender-btn" class="btn">1. Generate Qubits</button>
+                    <button id="send-photons-btn" class="btn" disabled>2. Send Photons</button>
+
+                    <div class="glass" style="width: 100%; margin-top: 1rem; padding: 0.5rem; overflow-x: auto;">
+                        <h4>Alice's Log</h4>
+                        <table class="data-log">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Bit</th>
+                                    <th>Basis</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alice-table-body">
+                                <tr>
+                                    <td colspan="4">No data generated</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Quantum Channel -->
+                <div class="channel glass">
+                    <h4 style="position: absolute; top: 1rem; color: var(--text-secondary);">Quantum Channel</h4>
+                    <div id="photon-track" class="photon-track">
+                        <!-- Photons will animate here -->
+                    </div>
+                    <div class="mid-status" style="margin-top: 2rem; text-align: center;">
+                        <span class="material-symbols-outlined"
+                            style="font-size: 3rem; color: var(--glass-border);">Compare_Arrows</span>
+                    </div>
+                </div>
+
+                <!-- Bob (Receiver) -->
+                <div class="actor-panel">
+                    <h3>Bob</h3>
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bob&backgroundColor=ffdfbf" alt="Bob"
+                        class="actor-avatar">
+                    <button id="measure-receiver-btn" class="btn" disabled>3. Measure</button>
+
+                    <div class="glass" style="width: 100%; margin-top: 1rem; padding: 0.5rem; overflow-x: auto;">
+                        <h4>Bob's Log</h4>
+                        <table class="data-log">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Basis</th>
+                                    <th>Result</th>
+                                    <th>Match?</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bob-table-body">
+                                <tr>
+                                    <td colspan="4">Waiting for photons...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 2rem;">
+                <button id="compare-bases-btn" class="btn" disabled>4. Compare Bases (Classic Channel)</button>
+            </div>
+
+            <div class="glass-panel" style="margin-top: 2rem; text-align: center;">
+                <h3>Final Sifted Key</h3>
+                <div id="sifted-key-display" class="font-mono"
+                    style="font-size: 2rem; color: var(--success); letter-spacing: 0.5rem; margin-top: 1rem; word-break: break-all;">
+                    -
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Theory Section -->
+        <section class="theory-section">
+            <div class="info-card fade-in">
+                <h3><span class="material-symbols-outlined">light_mode</span> Polarization</h3>
+                <p>Light can be polarized in different directions. In BB84, we use two bases: Rectilinear (+:
+                    Horizontal/Vertical) and Diagonal (x: 45°/135°).</p>
+            </div>
+            <div class="info-card fade-in">
+                <h3><span class="material-symbols-outlined">encrypted</span> The Protocol</h3>
+                <p>1. Alice sends random bits in random bases.<br>2. Bob measures in random bases.<br>3. They publicly
+                    share which BASIS they used.<br>4. They keep bits where bases matched.</p>
+            </div>
+            <div class="info-card fade-in">
+                <h3><span class="material-symbols-outlined">security</span> Detecting Eve</h3>
+                <p>If Eve tries to measure the photons en route, she must guess the basis. If she guesses wrong, she
+                    alters the photon state (Heisenberg Uncertainty Principle), introducing errors that Alice and Bob
+                    can detect.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>Created for the Quantum Cryptography Activity &copy; 2026</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
