@@ -1,283 +1,405 @@
-/**
- * Quantum Cryptography (BB84) Simulation Logic
- * Refactored for modularity and clarity.
- */
+// --- State ---
+let config = {
+    length: 12,
+    evePresent: false
+};
 
-class BB84Simulation {
-    constructor() {
-        this.bitLength = 10; // Number of bits to simulate per batch
-        this.aliceBits = [];
-        this.aliceBases = []; // 0 for Rectilinear (+), 1 for Diagonal (x)
-        this.bobBases = [];
-        this.bobResults = [];
-        this.siftedKey = [];
-        this.isEvePresent = false;
+// --- Constants ---
+const BASES = {
+    RECT: '+',
+    DIAG: 'x'
+};
 
-        // DOM Elements
-        this.elements = {
-            controls: {
-                generateSender: document.getElementById('gen-sender-btn'),
-                sendPhotons: document.getElementById('send-photons-btn'),
-                measureReceiver: document.getElementById('measure-receiver-btn'),
-                compareBases: document.getElementById('compare-bases-btn'),
-                toggleEve: document.getElementById('toggle-eve-btn'),
-                reset: document.getElementById('reset-btn')
-            },
-            displays: {
-                aliceTable: document.getElementById('alice-table-body'),
-                bobTable: document.getElementById('bob-table-body'),
-                siftedKeyDisplay: document.getElementById('sifted-key-display'),
-                stepIndicator: document.getElementById('current-step'),
-                photonTrack: document.getElementById('photon-track')
-            }
-        };
+const STATES = {
+    H: { name: 'H', angle: 0, bit: 0, basis: '+' },
+    V: { name: 'V', angle: 90, bit: 1, basis: '+' },
+    P45: { name: '+45', angle: 45, bit: 0, basis: 'x' },
+    M45: { name: '-45', angle: -45, bit: 1, basis: 'x' }
+};
 
-        this.step = 0; // 0: Init, 1: Generated, 2: Sent, 3: Measured, 4: Sifted
-        this.bindEvents();
-    }
+// Helper to get random bit (0 or 1)
+const randomBit = () => Math.random() < 0.5 ? 0 : 1;
 
-    bindEvents() {
-        this.elements.controls.generateSender.addEventListener('click', () => this.generateAliceData());
-        this.elements.controls.sendPhotons.addEventListener('click', () => this.transmitPhotons());
-        this.elements.controls.measureReceiver.addEventListener('click', () => this.bobMeasure());
-        this.elements.controls.compareBases.addEventListener('click', () => this.siftKey());
-        this.elements.controls.toggleEve.addEventListener('click', () => this.toggleEve());
-        this.elements.controls.reset.addEventListener('click', () => this.reset());
-    }
+// Helper to get random basis ('+' or 'x')
+const randomBasis = () => Math.random() < 0.5 ? BASES.RECT : BASES.DIAG;
 
-    // Helper: Random Bit (0 or 1)
-    randomBit() {
-        return Math.round(Math.random());
-    }
+// --- Core Logic ---
 
-    // Helper: Random Basis (0: +, 1: x)
-    randomBasis() {
-        return Math.random() < 0.5 ? '+' : 'x';
-    }
+function toggleEve() {
+    config.evePresent = !config.evePresent;
+    const btn = document.getElementById('eveToggle');
+    const ind = document.getElementById('eveIndicator');
+    const status = document.getElementById('eveStatus');
+    const avatar = document.getElementById('eveAvatar');
 
-    // Step 1: Alice generates random bits and bases
-    generateAliceData() {
-        this.aliceBits = Array.from({ length: this.bitLength }, () => this.randomBit());
-        this.aliceBases = Array.from({ length: this.bitLength }, () => this.randomBasis());
-
-        this.renderAliceTable();
-        this.updateStep(1, "Alice has prepared her qubits.");
-        this.elements.controls.generateSender.disabled = true;
-        this.elements.controls.sendPhotons.disabled = false;
-    }
-
-    renderAliceTable() {
-        const tbody = this.elements.displays.aliceTable;
-        tbody.innerHTML = '';
-        this.aliceBits.forEach((bit, i) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${i + 1}</td>
-                <td class="font-mono text-accent-cyan">${bit}</td>
-                <td class="font-mono text-accent-purple">${this.aliceBases[i]}</td>
-                <td class="text-secondary">-</td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
-
-    // Step 2: Transmission Animation
-    transmitPhotons() {
-        this.updateStep(2, "Photons are traveling through the quantum channel...");
-        this.elements.controls.sendPhotons.disabled = true;
-
-        const track = this.elements.displays.photonTrack;
-        track.innerHTML = '';
-
-        let completedAnimations = 0;
-
-        this.aliceBits.forEach((bit, i) => {
-            setTimeout(() => {
-                const photon = document.createElement('div');
-                photon.className = 'photon';
-                // Visual representation of polarization
-                const basis = this.aliceBases[i];
-                let rotation = 0;
-                if (basis === '+') rotation = bit === 0 ? 0 : 90; // 0=H, 1=V
-                else rotation = bit === 0 ? 45 : 135; // 0=45, 1=135
-
-                photon.innerHTML = basis === '+' ? (bit === 0 ? '&rarr;' : '&uarr;') : (bit === 0 ? '&nearr;' : '&nwarr;');
-
-                track.appendChild(photon);
-
-                // If Eve is present, she intercepts!
-                if (this.isEvePresent) {
-                    photon.style.backgroundColor = 'var(--danger)';
-                    photon.style.boxShadow = '0 0 10px var(--danger)';
-                }
-
-                photon.addEventListener('animationend', () => {
-                    photon.remove();
-                    completedAnimations++;
-                    if (completedAnimations === this.bitLength) {
-                        this.updateStep(2.5, "Photons received. Bob needs to measure.");
-                        this.elements.controls.measureReceiver.disabled = false;
-                    }
-                });
-
-            }, i * 300); // Stagger animations
-        });
-    }
-
-    // Step 3: Bob Measures
-    bobMeasure() {
-        this.bobBases = Array.from({ length: this.bitLength }, () => this.randomBasis());
-        this.bobResults = [];
-
-        for (let i = 0; i < this.bitLength; i++) {
-            let bit = this.aliceBits[i];
-            let basisAlice = this.aliceBases[i];
-            let basisBob = this.bobBases[i];
-
-            // If bases match, Bob gets the correct bit (100% probability in ideal scenario)
-            if (basisAlice === basisBob) {
-                this.bobResults.push(bit);
-            } else {
-                // Bases differ: 50% chance of random result
-                this.bobResults.push(this.randomBit());
-            }
-
-            // Eavesdropper Logic (Simplified Intercept-Resend)
-            if (this.isEvePresent) {
-                // Eve measures with random basis
-                const eveBasis = this.randomBasis();
-                if (eveBasis !== basisAlice) {
-                    // Eve chose wrong basis, she might disturb the photon
-                    if (Math.random() < 0.5) {
-                        // 50% chance the bit flips even if Bob guesses basis right later
-                        // For simulation simplicity, we just say if Eve is wrong, state is randomized
-                        // But strictly, if Alice=+, Eve=x, Bob=+, result is random.
-                        // If this simplified logic runs, we can simulate error introduction.
-                        // Let's keep it consistent with the standard BB84 error rate introduction.
-                        if (basisAlice === basisBob && Math.random() < 0.5) {
-                            // Introduce error!
-                            this.bobResults[i] = 1 - this.bobResults[i];
-                        }
-                    }
-                }
-            }
-        }
-
-        this.renderBobTable();
-        this.updateStep(3, "Bob has measured the photons.");
-        this.elements.controls.measureReceiver.disabled = true;
-        this.elements.controls.compareBases.disabled = false;
-    }
-
-    renderBobTable() {
-        const tbody = this.elements.displays.bobTable;
-        tbody.innerHTML = '';
-        this.bobResults.forEach((bit, i) => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${i + 1}</td>
-                <td class="font-mono text-accent-cyan">${this.bobBases[i]}</td>
-                <td class="font-mono text-white">${bit}</td>
-                <td class="text-secondary status-cell">?</td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
-
-    // Step 4: Sift Key (Compare Bases)
-    siftKey() {
-        this.siftedKey = [];
-        const bobRows = this.elements.displays.bobTable.querySelectorAll('tr');
-        const aliceRows = this.elements.displays.aliceTable.querySelectorAll('tr');
-
-        let matchCount = 0;
-        let errorCount = 0;
-
-        for (let i = 0; i < this.bitLength; i++) {
-            const cell = bobRows[i].querySelector('.status-cell');
-            const aliceStatus = aliceRows[i].lastElementChild;
-
-            if (this.aliceBases[i] === this.bobBases[i]) {
-                // Bases Matched!
-                this.siftedKey.push(this.bobResults[i]);
-                cell.innerHTML = '<span class="status-badge status-match">Match</span>';
-                aliceStatus.innerHTML = '<span class="status-badge status-match">Match</span>';
-
-                // Check for errors (Eve detection)
-                if (this.aliceBits[i] !== this.bobResults[i]) {
-                    cell.innerHTML += ' <span class="text-danger">(Error!)</span>';
-                    aliceStatus.innerHTML += ' <span class="text-danger">(Error!)</span>';
-                    errorCount++;
-                }
-                matchCount++;
-            } else {
-                cell.innerHTML = '<span class="status-badge status-mismatch">Discard</span>';
-                aliceStatus.innerHTML = '<span class="status-badge status-mismatch">Discard</span>';
-                cell.style.opacity = '0.5';
-                aliceStatus.style.opacity = '0.5';
-            }
-        }
-
-        this.elements.displays.siftedKeyDisplay.textContent = this.siftedKey.join('');
-        this.elements.controls.compareBases.disabled = true;
-
-        let msg = `Sifting complete. Key length: ${this.siftedKey.length}.`;
-        if (errorCount > 0) {
-            msg += ` WARNING: ${errorCount} errors detected in matching bases! Eve might be listening.`;
-            this.elements.displays.stepIndicator.style.color = 'var(--danger)';
-        } else {
-            msg += " No errors detected. Channel secure.";
-            this.elements.displays.stepIndicator.style.color = 'var(--success)';
-        }
-        this.updateStep(4, msg);
-    }
-
-    toggleEve() {
-        this.isEvePresent = !this.isEvePresent;
-        const btn = this.elements.controls.toggleEve;
-        if (this.isEvePresent) {
-            btn.textContent = "Disable Eve (Spy)";
-            btn.classList.add('btn-danger'); // Assuming you add a cleaner class for red buttons
-            btn.style.backgroundColor = 'var(--danger)';
-            btn.style.borderColor = 'var(--danger)';
-        } else {
-            btn.textContent = "Enable Eve (Spy)";
-            btn.style.backgroundColor = '';
-            btn.style.borderColor = '';
-        }
-        this.reset();
-        this.updateStep(0, `Simulation reset. Eve is now ${this.isEvePresent ? 'ACTIVE' : 'INACTIVE'}.`);
-    }
-
-    reset() {
-        this.aliceBits = [];
-        this.aliceBases = [];
-        this.bobBases = [];
-        this.bobResults = [];
-        this.siftedKey = [];
-        this.step = 0;
-
-        this.elements.displays.aliceTable.innerHTML = '';
-        this.elements.displays.bobTable.innerHTML = '';
-        this.elements.displays.siftedKeyDisplay.textContent = '-';
-        this.elements.displays.photonTrack.innerHTML = '';
-
-        this.elements.controls.generateSender.disabled = false;
-        this.elements.controls.sendPhotons.disabled = true;
-        this.elements.controls.measureReceiver.disabled = true;
-        this.elements.controls.compareBases.disabled = true;
-
-        this.elements.displays.stepIndicator.style.color = 'var(--text-primary)';
-        this.updateStep(0, "Ready to start.");
-    }
-
-    updateStep(num, text) {
-        this.step = num;
-        this.elements.displays.stepIndicator.textContent = text;
+    if (config.evePresent) {
+        btn.classList.replace('bg-slate-700', 'bg-red-600');
+        ind.classList.replace('left-1', 'translate-x-7');
+        status.innerText = "ACTIVE";
+        status.classList.replace('text-slate-500', 'text-red-500');
+        avatar.classList.remove('grayscale', 'opacity-50');
+    } else {
+        btn.classList.replace('bg-red-600', 'bg-slate-700');
+        ind.classList.remove('translate-x-7');
+        ind.classList.add('left-1');
+        status.innerText = "ABSENT";
+        status.classList.replace('text-red-500', 'text-slate-500');
+        avatar.classList.add('grayscale', 'opacity-50');
     }
 }
 
-// Initialize on Load
-document.addEventListener('DOMContentLoaded', () => {
-    window.simulation = new BB84Simulation();
-});
+function getPhotonState(bit, basis) {
+    if (basis === BASES.RECT) return bit === 0 ? STATES.H : STATES.V;
+    if (basis === BASES.DIAG) return bit === 0 ? STATES.P45 : STATES.M45;
+}
+
+// Simulates measurement of an incoming state by a specific basis
+function measurePhoton(incomingState, measureBasis) {
+    // Case 1: Matching Bases (Deterministic)
+    if (incomingState.basis === measureBasis) {
+        return incomingState; // State is preserved
+    }
+
+    // Case 2: Mismatching Bases (Probabilistic collapse)
+    // If measuring RECT (+), result is H or V (50/50)
+    if (measureBasis === BASES.RECT) {
+        return Math.random() < 0.5 ? STATES.H : STATES.V;
+    }
+    // If measuring DIAG (x), result is +45 or -45 (50/50)
+    return Math.random() < 0.5 ? STATES.P45 : STATES.M45;
+}
+
+function runSimulation() {
+    config.length = parseInt(document.getElementById('lengthSlider').value);
+    const container = document.getElementById('sim-container');
+    container.innerHTML = ''; // Clear previous
+
+    // Data Arrays
+    let aliceData = [];
+    let eveData = [];
+    let bobData = [];
+    let siftedData = []; // { bit: number | null, isError: boolean }
+
+    // 1. Generate Alice's Data
+    for (let i = 0; i < config.length; i++) {
+        const bit = randomBit();
+        const basis = randomBasis();
+        const state = getPhotonState(bit, basis);
+        aliceData.push({ id: i, bit, basis, state });
+    }
+
+    // 2. Simulate Channel (Eve)
+    let currentPhotons = aliceData.map(d => d.state); // What travels to Bob
+
+    if (config.evePresent) {
+        for (let i = 0; i < config.length; i++) {
+            const eveBasis = randomBasis();
+            const measuredState = measurePhoton(currentPhotons[i], eveBasis);
+            eveData.push({ basis: eveBasis, measuredState: measuredState });
+            currentPhotons[i] = measuredState; // Eve resends the measured state
+        }
+    } else {
+        // If Eve absent, fill with nulls for visual alignment
+        for (let i = 0; i < config.length; i++) eveData.push(null);
+    }
+
+    // 3. Bob Measures
+    for (let i = 0; i < config.length; i++) {
+        const bobBasis = randomBasis();
+        const resultState = measurePhoton(currentPhotons[i], bobBasis);
+        bobData.push({ basis: bobBasis, resultBit: resultState.bit });
+    }
+
+    // 4. Sifting & Error Check
+    let totalSifted = 0;
+    let totalErrors = 0;
+    let siftedString = "";
+
+    for (let i = 0; i < config.length; i++) {
+        const basisMatch = aliceData[i].basis === bobData[i].basis;
+
+        if (basisMatch) {
+            totalSifted++;
+            const isError = aliceData[i].bit !== bobData[i].resultBit;
+            if (isError) totalErrors++;
+
+            siftedData.push({
+                bit: bobData[i].resultBit,
+                isError: isError,
+                kept: true
+            });
+            siftedString += isError ? `<span class="text-red-500">${bobData[i].resultBit}</span>` : bobData[i].resultBit;
+        } else {
+            siftedData.push({ kept: false });
+        }
+    }
+
+    // 5. Render UI
+    renderTrack(aliceData, eveData, bobData, siftedData);
+    updateAnalysis(totalSifted, totalErrors, siftedString);
+}
+
+function renderTrack(alice, eve, bob, sifted) {
+    const container = document.getElementById('sim-container');
+
+    // Grid layout configuration
+    const cellClass = "w-16 flex flex-col items-center justify-center p-2 border-r border-slate-700/50 flex-shrink-0";
+    const rowClass = "flex border-b border-slate-700/50 min-w-max";
+    const labelClass = "w-32 flex-shrink-0 p-4 font-bold text-slate-400 bg-slate-900/80 sticky left-0 z-10 flex items-center border-r border-slate-700 backdrop-blur";
+
+    // Helper to draw arrow SVG based on state
+    const drawArrow = (state, color = "text-blue-400") => {
+        let rot = 0;
+        if (state.name === 'H') rot = 0;
+        else if (state.name === 'V') rot = 90;
+        else if (state.name === '+45') rot = -45; // SVG coord system
+        else if (state.name === '-45') rot = 45;
+
+        return `
+                <div class="relative w-8 h-8 rounded-full border border-slate-600 flex items-center justify-center bg-slate-800 shadow-inner">
+                    <span class="material-symbols-outlined ${color} text-xl" style="transform: rotate(${rot}deg)">arrow_right_alt</span>
+                </div>`;
+    };
+
+    // Helper for Film Graphic
+    const drawFilm = (basis, active = true) => {
+        if (!active) return `<div class="w-10 h-10"></div>`;
+        const icon = basis === '+' ? 'add' : 'close';
+        const color = basis === '+' ? 'text-blue-400' : 'text-purple-400';
+        return `
+                <div class="polaroid-film w-10 h-10 rounded flex items-center justify-center mb-1">
+                    <span class="material-symbols-outlined ${color} text-2xl drop-shadow-md">${icon}</span>
+                </div>`;
+    };
+
+    // Row 1: Alice
+    let html = `<div class="${rowClass} bg-blue-900/10">
+                <div class="${labelClass}">
+                    <div class="flex flex-col">
+                        <span class="text-blue-400">Alice</span>
+                        <span class="text-[10px] font-normal text-slate-500">Preparation</span>
+                    </div>
+                </div>`;
+
+    alice.forEach(d => {
+        html += `<div class="${cellClass}">
+                    <div class="text-xs font-mono text-slate-400 mb-1">Bit:${d.bit}</div>
+                    ${drawFilm(d.basis)}
+                    <div class="mt-1">${drawArrow(d.state)}</div>
+                </div>`;
+    });
+    html += `</div>`;
+
+    // Row 2: Eve (Optional)
+    if (config.evePresent) {
+        html += `<div class="${rowClass} bg-red-900/10">
+                    <div class="${labelClass}">
+                        <div class="flex flex-col">
+                            <span class="text-red-400">Eve</span>
+                            <span class="text-[10px] font-normal text-slate-500">Interception</span>
+                        </div>
+                    </div>`;
+
+        eve.forEach(d => {
+            html += `<div class="${cellClass}">
+                         <div class="text-[10px] text-red-500/70 font-bold mb-1">INTERCEPT</div>
+                         ${drawFilm(d.basis)}
+                         <div class="mt-1 opacity-70">${drawArrow(d.measuredState, "text-red-400")}</div>
+                    </div>`;
+        });
+        html += `</div>`;
+    }
+
+    // Row 3: Bob
+    html += `<div class="${rowClass} bg-green-900/10">
+                <div class="${labelClass}">
+                    <div class="flex flex-col">
+                        <span class="text-green-400">Bob</span>
+                        <span class="text-[10px] font-normal text-slate-500">Measurement</span>
+                    </div>
+                </div>`;
+
+    bob.forEach((d, i) => {
+        html += `<div class="${cellClass}">
+                    ${drawFilm(d.basis)}
+                    <div class="text-xs font-mono text-slate-300 mt-2">Res:${d.resultBit}</div>
+                </div>`;
+    });
+    html += `</div>`;
+
+    // Row 4: Comparison (Sifting)
+    html += `<div class="${rowClass} bg-slate-900/30">
+                <div class="${labelClass}">
+                    <div class="flex flex-col">
+                        <span class="text-yellow-400">Sifting</span>
+                        <span class="text-[10px] font-normal text-slate-500">Public Check</span>
+                    </div>
+                </div>`;
+
+    sifted.forEach((d, i) => {
+        const aliceB = alice[i].basis;
+        const bobB = bob[i].basis;
+        const match = aliceB === bobB;
+
+        let content = '';
+        if (match) {
+            content = `<div class="w-full h-full bg-green-500/10 border border-green-500/30 rounded flex flex-col items-center justify-center">
+                        <span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                        <span class="text-[10px] text-green-300 mt-1">MATCH</span>
+                    </div>`;
+        } else {
+            content = `<div class="opacity-30 flex flex-col items-center">
+                        <span class="text-xs text-slate-500">${aliceB} vs ${bobB}</span>
+                        <span class="material-symbols-outlined text-slate-600 text-sm">cancel</span>
+                    </div>`;
+        }
+
+        html += `<div class="${cellClass} h-20">${content}</div>`;
+    });
+    html += `</div>`;
+
+    // Row 5: Final Key
+    html += `<div class="${rowClass}">
+                <div class="${labelClass}">
+                    <div class="flex flex-col">
+                        <span class="text-white">Final Key</span>
+                        <span class="text-[10px] font-normal text-slate-500">Sifted Bits</span>
+                    </div>
+                </div>`;
+
+    sifted.forEach(d => {
+        let content = '';
+        if (d.kept) {
+            const color = d.isError ? "text-red-500 font-bold bg-red-900/20 border-red-500" : "text-green-400 font-bold bg-green-900/20 border-green-500";
+            content = `<div class="w-8 h-8 rounded border ${color} flex items-center justify-center">${d.bit}</div>`;
+        } else {
+            content = `<span class="text-slate-700 text-xl">·</span>`;
+        }
+        html += `<div class="${cellClass}">${content}</div>`;
+    });
+    html += `</div>`;
+
+    container.innerHTML = html;
+}
+
+function updateAnalysis(totalSifted, totalErrors, siftedString) {
+    const panel = document.getElementById('analysis-panel');
+    panel.classList.remove('hidden');
+    setTimeout(() => panel.classList.remove('opacity-0'), 100);
+
+    // Sifted Key
+    document.getElementById('siftedKeyDisplay').innerHTML = siftedString || '<span class="text-slate-600 italic">No matching bases found</span>';
+
+    // Error Rate
+    const errorRate = totalSifted > 0 ? (totalErrors / totalSifted) * 100 : 0;
+    document.getElementById('errorRateDisplay').innerText = errorRate.toFixed(1) + '%';
+
+    // Animate Bar
+    const bar = document.getElementById('errorFill');
+    bar.style.width = `${Math.min(errorRate, 100)}%`;
+    if (errorRate > 0) bar.classList.replace('bg-green-500', 'bg-red-500');
+    else bar.classList.replace('bg-red-500', 'bg-green-500');
+
+    // Security Check
+    const statusEl = document.getElementById('securityStatus');
+    const msgEl = document.getElementById('securityMsg');
+    const light = document.getElementById('statusLight');
+
+    if (totalSifted === 0) {
+        statusEl.innerText = "INSUFFICIENT DATA";
+        statusEl.className = "font-bold text-lg text-yellow-500";
+        msgEl.innerText = "Increase sequence length to generate a key.";
+        light.className = "absolute -right-4 -top-4 w-20 h-20 bg-yellow-500/10 rounded-full blur-xl";
+    } else if (errorRate === 0) {
+        statusEl.innerText = "SECURE";
+        statusEl.className = "font-bold text-lg text-green-400";
+        msgEl.innerText = "No errors detected. Safe to use key.";
+        light.className = "absolute -right-4 -top-4 w-20 h-20 bg-green-500/20 rounded-full blur-xl";
+    } else {
+        statusEl.innerText = "COMPROMISED";
+        statusEl.className = "font-bold text-lg text-red-500";
+        msgEl.innerText = `Eve detected! Error rate (${errorRate.toFixed(1)}%) exceeds threshold.`;
+        light.className = "absolute -right-4 -top-4 w-20 h-20 bg-red-500/20 rounded-full blur-xl";
+    }
+}
+
+// --- Improved Download Functionality ---
+async function downloadPage() {
+    const btn = document.getElementById('downloadBtn');
+    const originalContent = btn.innerHTML;
+
+    // 1. Show Loading State
+    btn.innerHTML = `
+                <span class="material-symbols-outlined animate-spin">refresh</span>
+                Processing Images...
+            `;
+    btn.disabled = true;
+
+    try {
+        // 2. Clone the current document to avoid messing with the live view
+        const docClone = document.documentElement.cloneNode(true);
+
+        // 3. Sync dynamic inputs to the clone (inputs/sliders don't always clone their current values to attributes)
+        const inputs = document.querySelectorAll('input');
+        const clonedInputs = docClone.querySelectorAll('input');
+        inputs.forEach((input, index) => {
+            clonedInputs[index].setAttribute('value', input.value);
+        });
+
+        // 4. Find all images in the clone
+        const images = docClone.querySelectorAll('img');
+
+        // 5. Convert images to Base64 (Data URIs)
+        const imagePromises = Array.from(images).map(async (img) => {
+            // Skip if it's already a data URI
+            if (img.src.startsWith('data:')) return;
+
+            try {
+                // Attempt to fetch the image data. 
+                // Note: This works if the server supports CORS or if it's same-origin. 
+                const response = await fetch(img.src);
+                const blob = await response.blob();
+
+                // Convert Blob to Data URL
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+
+                img.src = base64; // Replace the URL with the Base64 string
+            } catch (error) {
+                console.warn('Could not embed image:', img.src, error);
+                // If fetching fails (e.g., CORS), we leave the original URL.
+            }
+        });
+
+        // Wait for all image processing to finish
+        await Promise.all(imagePromises);
+
+        // 6. Generate the HTML Blob
+        const htmlContent = "<!DOCTYPE html>\n" + docClone.outerHTML;
+        const blob = new Blob([htmlContent], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+
+        // 7. Trigger Download
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "quantum-bb84-lab-full.html";
+        document.body.appendChild(a);
+        a.click();
+
+        // Cleanup
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+    } catch (err) {
+        console.error("Download failed:", err);
+        alert("Could not generate download. Check console for details.");
+    } finally {
+        // Restore button state
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }
+}
